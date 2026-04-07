@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrapShield — Cowrie Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg0: #0d0d0f; --bg1: #16161a; --bg2: #1e1e24;
+    --border: rgba(255,255,255,0.08);
+    --text0: #e8e8ec; --text1: #9898a6; --text2: #5a5a6a;
+    --red: #E24B4A; --amber: #EF9F27; --green: #3dba7f; --blue: #378ADD;
+    --red-bg: rgba(226,75,74,0.12); --amber-bg: rgba(239,159,39,0.12); --green-bg: rgba(61,186,127,0.12);
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --font-sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg0); color: var(--text0); font-family: var(--font-sans); font-size: 14px; padding: 24px; }
+  h1 { font-size: 16px; font-weight: 500; color: var(--text0); }
+  .sub { font-size: 12px; color: var(--text2); font-family: var(--font-mono); margin-left: 12px; }
+  .header { display: flex; align-items: baseline; gap: 0; margin-bottom: 20px; border-bottom: 0.5px solid var(--border); padding-bottom: 14px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 8px; display: inline-block; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .metric { background: var(--bg1); border: 0.5px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .metric-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .metric-val { font-size: 28px; font-weight: 600; font-family: var(--font-mono); }
+  .two-col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--bg1); border: 0.5px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .card-title { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+  .badge-red { background: var(--red-bg); color: var(--red); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); }
+  .badge-green { background: var(--green-bg); color: var(--green); }
+  .tl { display: flex; flex-direction: column; gap: 8px; }
+  .tl-row { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; }
+  .tl-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
+  .tl-time { color: var(--text2); min-width: 42px; font-family: var(--font-mono); font-size: 11px; }
+  .tl-text { color: var(--text1); line-height: 1.5; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .bar-label { min-width: 120px; color: var(--text1); font-family: var(--font-mono); font-size: 11px; }
+  .bar-track { flex: 1; background: var(--bg2); border-radius: 3px; height: 12px; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+  .bar-count { min-width: 18px; text-align: right; color: var(--text2); font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; font-size: 11px; color: var(--text2); padding: 4px 8px 8px; border-bottom: 0.5px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
+  td { padding: 7px 8px; border-bottom: 0.5px solid var(--border); color: var(--text1); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: var(--font-mono); font-size: 11px; }
+  .cmd-danger { color: var(--red); font-family: var(--font-mono); font-size: 11px; }
+  .refresh-bar { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text2); margin-bottom: 20px; }
+  #file-btn { background: var(--bg2); border: 0.5px solid var(--border); color: var(--text1); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  #file-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text0); }
+  #last-updated { font-family: var(--font-mono); }
+  .warn-box { background: var(--amber-bg); border: 0.5px solid rgba(239,159,39,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--amber); margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="status-dot" id="status-dot"></span>
+  <h1>TrapShield — Cowrie Honeypot</h1>
+  <span class="sub" id="file-name">no file loaded</span>
+</div>
+
+<div class="refresh-bar">
+  <button id="file-btn" onclick="document.getElementById('file-input').click()">Load JSON log file</button>
+  <input type="file" id="file-input" accept=".json,.jsonl,*" style="display:none">
+  <span>Auto-refresh every</span>
+  <select id="interval-sel" style="background:var(--bg2);border:0.5px solid var(--border);color:var(--text1);padding:3px 8px;border-radius:5px;font-size:12px;">
+    <option value="5000">5s</option>
+    <option value="10000" selected>10s</option>
+    <option value="30000">30s</option>
+    <option value="60000">60s</option>
+    <option value="0">off</option>
+  </select>
+  <span>— last updated: <span id="last-updated">—</span></span>
+</div>
+
+<div class="metric-grid">
+  <div class="metric"><div class="metric-label">Total events</div><div class="metric-val" id="m-events" style="color:var(--text0)">—</div></div>
+  <div class="metric"><div class="metric-label">Sessions</div><div class="metric-val" id="m-sessions" style="color:var(--blue)">—</div></div>
+  <div class="metric"><div class="metric-label">Login successes</div><div class="metric-val" id="m-logins" style="color:var(--red)">—</div></div>
+  <div class="metric"><div class="metric-label">Commands run</div><div class="metric-val" id="m-cmds" style="color:var(--amber)">—</div></div>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <div class="card-title">Session timeline</div>
+    <div class="tl" id="timeline"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Attack classification</div>
+    <div style="position:relative;width:100%;height:200px;"><canvas id="donut"></canvas></div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11px;color:var(--text2);" id="donut-legend"></div>
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <div class="card-title">Top commands</div>
+    <div id="cmd-bars"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Credential attempts</div>
+    <table><thead><tr><th>User</th><th>Password</th><th>Count</th><th>Result</th></tr></thead>
+    <tbody id="cred-table"></tbody></table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:12px;">
+  <div class="card-title">All sessions</div>
+  <table>
+    <thead><tr><th>Session</th><th>Time</th><th>Credentials</th><th>Duration</th><th>Commands</th><th>Classification</th></tr></thead>
+    <tbody id="session-table"></tbody>
+  </table>
+</div>
+
+<script>
+let donutChart = null;
+let refreshTimer = null;
+let currentFileHandle = null;
+
+// ── parse NDJSON (one JSON per line) ──────────────────────────────────────────
+function parseNDJSON(text) {
+  return text.trim().split('\n').flatMap(line => {
+    line = line.trim();
+    if (!line) return [];
+    try { return [JSON.parse(line)]; } catch { return []; }
+  });
+}
+
+// ── classify a session by its commands ───────────────────────────────────────
+function classify(cmds) {
+  const all = cmds.join(' ').toLowerCase();
+  if (/wget.*malware|curl.*malware|chmod.*\+x|\.\/[a-z]/.test(all)) return 'malware download';
+  if (/wget|curl|tftp|ftp/.test(all)) return 'download attempt';
+  if (/ls|cd |find|cat \/etc|id|whoami|uname|ps |netstat|ifconfig|ip addr/.test(all)) return 'enumeration';
+  if (/hackcheck|exploit|nmap|scan|brute/.test(all)) return 'recon';
+  if (cmds.length === 0) return 'no commands';
+  return 'unknown';
+}
+
+function classifyBadge(cls) {
+  if (cls === 'malware download') return '<span class="badge badge-red">malware DL</span>';
+  if (cls === 'download attempt') return '<span class="badge badge-red">download</span>';
+  if (cls === 'enumeration')      return '<span class="badge badge-amber">enumeration</span>';
+  if (cls === 'recon')            return '<span class="badge badge-amber">recon</span>';
+  if (cls === 'no commands')      return '<span class="badge badge-green">probe only</span>';
+  return '<span class="badge badge-amber">unknown</span>';
+}
+
+function dotColor(cls) {
+  if (cls === 'malware download' || cls === 'download attempt') return 'var(--red)';
+  if (cls === 'no commands') return 'var(--text2)';
+  return 'var(--amber)';
+}
+
+// ── main render ───────────────────────────────────────────────────────────────
+function render(events) {
+  // per-session grouping
+  const sessions = {};
+  for (const e of events) {
+    const s = e.session;
+    if (!s) continue;
+    if (!sessions[s]) sessions[s] = { events: [], cmds: [], loggedIn: false, cred: null, start: null, duration: null };
+    sessions[s].events.push(e);
+    if (!sessions[s].start) sessions[s].start = e.timestamp;
+    if (e.eventid === 'cowrie.login.success') {
+      sessions[s].loggedIn = true;
+      sessions[s].cred = (e.username || '') + '/' + (e.password || '');
+    }
+    if (e.eventid === 'cowrie.command.input' && e.input) sessions[s].cmds.push(e.input);
+    if (e.eventid === 'cowrie.session.closed') sessions[s].duration = parseFloat(e.duration || 0);
+  }
+
+  const sessionList = Object.entries(sessions).sort((a,b) => (a[1].start||'').localeCompare(b[1].start||''));
+
+  // metrics
+  document.getElementById('m-events').textContent = events.length;
+  document.getElementById('m-sessions').textContent = sessionList.length;
+  document.getElementById('m-logins').textContent = sessionList.filter(([,s]) => s.loggedIn).length;
+  document.getElementById('m-cmds').textContent = sessionList.reduce((n,[,s]) => n + s.cmds.length, 0);
+
+  // timeline
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = sessionList.map(([sid, s]) => {
+    const cls = classify(s.cmds);
+    const t = s.start ? s.start.slice(11,16) : '?';
+    const cmdStr = s.cmds.length ? s.cmds.slice(0,3).join(', ') + (s.cmds.length>3?'…':'') : 'no commands';
+    const isDanger = cls === 'malware download' || cls === 'download attempt';
+    return `<div class="tl-row">
+      <div class="tl-dot" style="background:${dotColor(cls)}"></div>
+      <span class="tl-time">${t}</span>
+      <span class="tl-text"><span class="mono">${sid.slice(0,8)}</span> — ${s.loggedIn ? (s.cred||'logged in') : 'no login'} — <span class="${isDanger?'cmd-danger':'mono'}">${cmdStr}</span> ${classifyBadge(cls)}</span>
+    </div>`;
+  }).join('');
+
+  // donut
+  const classCounts = {};
+  for (const [, s] of sessionList) {
+    const c = classify(s.cmds);
+    classCounts[c] = (classCounts[c]||0) + 1;
+  }
+  const colorMap = {
+    'malware download': '#E24B4A', 'download attempt': '#c0392b',
+    'enumeration': '#EF9F27', 'recon': '#d4ac0d',
+    'no commands': '#888780', 'unknown': '#5a5a6a'
+  };
+  const labels = Object.keys(classCounts);
+  const data = labels.map(l => classCounts[l]);
+  const colors = labels.map(l => colorMap[l] || '#888');
+
+  if (donutChart) donutChart.destroy();
+  donutChart = new Chart(document.getElementById('donut'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 5 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      plugins: { legend: { display: false } }
+    }
+  });
+  document.getElementById('donut-legend').innerHTML = labels.map((l,i) =>
+    `<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:${colors[i]}"></span>${l} (${data[i]})</span>`
+  ).join('');
+
+  // command bars
+  const cmdCount = {};
+  for (const [,s] of sessionList) for (const c of s.cmds) cmdCount[c] = (cmdCount[c]||0) + 1;
+  const sortedCmds = Object.entries(cmdCount).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const maxCmd = sortedCmds[0]?.[1] || 1;
+  const barColors = c => /malware|wget.*mal|exploit/.test(c) ? 'var(--red)' : /ls|cd |find|cat|id|whoami|netstat|ifconfig/.test(c) ? 'var(--amber)' : 'var(--blue)';
+  document.getElementById('cmd-bars').innerHTML = sortedCmds.map(([c,n]) =>
+    `<div class="bar-row"><div class="bar-label">${c}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/maxCmd*100)}%;background:${barColors(c)}"></div></div><div class="bar-count">${n}</div></div>`
+  ).join('') || '<span style="color:var(--text2);font-size:12px;">no commands recorded</span>';
+
+  // credential table
+  const credMap = {};
+  for (const e of events) {
+    if (e.eventid === 'cowrie.login.success') {
+      const k = (e.username||'?') + '|' + (e.password||'?');
+      credMap[k] = (credMap[k]||0) + 1;
+    }
+  }
+  document.getElementById('cred-table').innerHTML = Object.entries(credMap).map(([k,n]) => {
+    const [u,p] = k.split('|');
+    return `<tr><td class="mono">${u}</td><td class="mono">${p}</td><td>${n}</td><td><span class="badge badge-red">success</span></td></tr>`;
+  }).join('') || '<tr><td colspan="4" style="color:var(--text2);">no login events</td></tr>';
+
+  // session table
+  document.getElementById('session-table').innerHTML = sessionList.map(([sid, s]) => {
+    const cls = classify(s.cmds);
+    const isDanger = cls === 'malware download' || cls === 'download attempt';
+    const t = s.start ? s.start.slice(11,16) : '?';
+    const dur = s.duration !== null ? s.duration + 's' : '—';
+    return `<tr>
+      <td class="mono">${sid.slice(0,8)}</td>
+      <td class="mono">${t}</td>
+      <td class="mono">${s.cred || '—'}</td>
+      <td class="mono">${dur}</td>
+      <td class="${isDanger?'cmd-danger':'mono'}">${s.cmds.join(', ') || '—'}</td>
+      <td>${classifyBadge(cls)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+  document.getElementById('status-dot').style.background = 'var(--green)';
+}
+
+// ── file loading ──────────────────────────────────────────────────────────────
+async function loadFile(file) {
+  currentFileHandle = file;
+  document.getElementById('file-name').textContent = file.name;
+  const text = await file.text();
+  const events = parseNDJSON(text);
+  render(events);
+}
+
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+// ── auto-refresh: re-read the same file handle ────────────────────────────────
+function scheduleRefresh() {
+  clearInterval(refreshTimer);
+  const ms = parseInt(document.getElementById('interval-sel').value);
+  if (ms > 0) {
+    refreshTimer = setInterval(async () => {
+      if (!currentFileHandle) return;
+      const text = await currentFileHandle.text();
+      const events = parseNDJSON(text);
+      render(events);
+    }, ms);
+  }
+}
+
+document.getElementById('interval-sel').addEventListener('change', scheduleRefresh);
+scheduleRefresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+# ---------------------------------------------
+#  Rule-Based IDS - Real Network Configuration
+# ---------------------------------------------
+
+network:
+  # Your actual network interface
+  # Run: ip route show default -> look for "dev XXXX"
+  interface: "YOUR-INTERFACE-NAME"
+
+  # Set BOTH to your LAN IP — Cowrie listens on 0.0.0.0:2222
+  # so DNAT to your LAN IP works perfectly
+  lan_ip: "YOUR-LAN-IP"
+  honeypot_ip: "YOUR-LAN-IP"
+  honeypot_port: 2222
+
+rules:
+  brute_force:
+    enabled: true
+    threshold: 5
+    window_seconds: 30
+    watch_ports: [22, 21, 3306, 5432]
+
+  port_scan:
+    enabled: true
+    threshold: 10
+    window_seconds: 10
+    syn_only: true
+
+response:
+  redirect_to_honeypot: true
+  iptables_chain: "IDS_REDIRECT"
+  block_duration_seconds: 0
+  drop_real_ssh: false
+
+logging:
+  log_file: "logs/ids_alerts.log"
+  log_level: "INFO"
